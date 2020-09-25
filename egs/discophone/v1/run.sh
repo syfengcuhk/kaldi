@@ -45,9 +45,9 @@ else
   gp_romanized=false
 fi
 
-. cmd.sh
-. utils/parse_options.sh
-. path.sh
+. ./cmd.sh
+. ./utils/parse_options.sh
+. ./path.sh
 
 local/install_shorten.sh
 
@@ -133,7 +133,7 @@ fi
 # When that is ready, we train a multilingual phone-level language model (i.e. phonotactic model),
 # that will be used to compile the decoding graph and to score each ASR system.
 if ((stage <= 3)); then
-  local/prepare_ipa_lm.sh \
+  . ./local/prepare_ipa_lm.sh \
     --train-set "$train_set" \
     --phone_token_opt "$phone_token_opt" \
     --order "$phone_ngram_order"
@@ -145,7 +145,7 @@ if ((stage <= 3)); then
     --position-dependent-phones false \
     data/local/dict_combined \
     "<unk>" data/local/dict_combined data/lang_combined
-  LM=data/ipa_lm/train_all/srilm.o3g.kn.gz
+  LM=data/ipa_lm/train_all/srilm.o${phone_ngram_order}g.kn.gz
   utils/format_lm.sh data/lang_combined "$LM" data/local/dict_combined/lexicon.txt data/lang_combined_test
 fi
 

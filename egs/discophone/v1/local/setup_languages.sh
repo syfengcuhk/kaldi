@@ -18,7 +18,7 @@ lang="nl"                                                # pointed to folder for
 comp="o"                                                 # pointed to 64hrs read speech #
 
 # GlobalPhone related options
-gp_path="/export/corpora5/GlobalPhone"
+gp_path="/ws/ifp-04_1/hasegawa/aliabavi/GlobalPhone"
 gp_langs="Arabic Czech French Korean Mandarin Spanish Thai"
 gp_recog="Arabic Czech French Korean Mandarin Spanish Thai"
 mboshi_train=false
