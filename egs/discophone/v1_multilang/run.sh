@@ -115,7 +115,7 @@ if (($stage <= 0)) && (($stop_stage > 0 ))  ; then
   echo "stage 0: Setting up individual languages"
   echo "babel_langs: $babel_langs"
   echo "gp_langs: $gp_langs"
-  local/setup_languages.sh \
+  local/setup_languages_multilang.sh \
     --langs "${babel_langs}" \
     --recog "${babel_recog}" \
     --gp-langs "${gp_langs}" \
