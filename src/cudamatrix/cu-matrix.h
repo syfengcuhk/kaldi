@@ -6,6 +6,7 @@
 //                2013  Xiaohui Zhang
 //           2013-2015  Guoguo Chen
 //                2017  Shiyin Kang
+//                2019  Yiwen Shao
 
 // See ../../COPYING for clarification regarding multiple authors
 //
@@ -139,6 +140,15 @@ class CuMatrixBase {
                const CuMatrixBase<Real> &src,
                const CuArrayBase<MatrixIndexT> &indexes);
 
+
+  /// Does for each row r, this.Row(r) *= alpha * src.row(indexes[r]),
+  /// where '*=' is elementwise multiplication.
+  /// If indexes[r] < 0, does not add anything.
+  /// src.NumCols() must equal this.NumCols()
+  void MulRows(const CuMatrixBase<Real> &src,
+               const CuArrayBase<MatrixIndexT> &indexes);
+
+
   /// Does for each row r, this.Row(r) += alpha * src[r],
   /// treating src[r] as the beginning of a region of memory representing
   /// a vector of floats, of the same length as this.NumCols().
@@ -228,6 +238,7 @@ class CuMatrixBase {
   void CopyFromMat(const MatrixBase<OtherReal> &src,
                    MatrixTransposeType trans = kNoTrans);
 
+
   void CopyFromGeneralMat(const GeneralMatrix &src,
                           MatrixTransposeType trans = kNoTrans);
 
@@ -239,6 +250,13 @@ class CuMatrixBase {
   template<typename OtherReal>
   void CopyFromTp(const CuTpMatrix<OtherReal> &M,
                   MatrixTransposeType trans = kNoTrans);
+  
+  // This function will copy from source rows (start_range, end_range]
+  // if the range is outside of the clamped region then the clamped
+  // row will be replicated across the out of range areas
+  void CopyRangeFromMatClamped(const CuMatrixBase<Real> & src,
+      int32_t start_range, int32_t end_range,
+      int32_t clamp_low, int32_t clamp_high);
 
   template<typename OtherReal>
   void CopyFromMat(const CuMatrixBase<OtherReal> &M,
@@ -274,6 +292,48 @@ class CuMatrixBase {
   /// in general, there are different ways to deal with the situation when x==0.]
   void Heaviside(const CuMatrixBase<Real> &src);
 
+  void Exp(const CuMatrixBase<Real> &src);
+
+  void Log(const CuMatrixBase<Real> &src);
+
+  void Pow(const CuMatrixBase<Real> &src, Real power);
+
+  /// Apply power to the absolute value of each element.
+  /// If include_sign is true, the result will be multiplied with
+  /// the sign of the input value.
+  /// If the power is negative and the input to the power is zero,
+  /// The output will be set zero. If include_sign is true, it will
+  /// multiply the result by the sign of the input.
+  void PowAbs(const CuMatrixBase<Real> &src, Real power, bool include_sign=false);
+
+  void Floor(const CuMatrixBase<Real> &src, Real floor_val);
+  
+  void Ceiling(const CuMatrixBase<Real> &src, Real ceiling_val);
+  
+  /// This is equivalent to running:
+  /// Floor(src, lower_limit);
+  /// Ceiling(src, upper_limit);
+  /// Exp(src)
+  void ExpLimited(const CuMatrixBase<Real> &src, Real lower_limit, Real upper_limit);
+
+  /// For each element x of the matrix, set it to
+  /// (x < 0 ? exp(x) : x + 1).  This function is used
+  /// in our RNNLM training.
+  void ExpSpecial(const CuMatrixBase<Real> &src);
+  
+  /// Softmax nonlinearity
+  /// Y = Softmax(X) : Yij = e^Xij / sum_k(e^Xik), done to each row,
+  /// with attention to avoiding  overflow or underflow.
+  /// Supports in-place operation (i.e. this == &src).
+  void SoftMaxPerRow(const CuMatrixBase<Real> &src);
+
+  /// LogSoftmax nonlinearity
+  /// Y = LogSoftmax(X) : Yij = Xij - log(sum_k(e^Xik)), done to each row,
+  /// with attention to avoiding  overflow or underflow.
+  /// Supports in-place operation (i.e. this == &src).
+  void LogSoftMaxPerRow(const CuMatrixBase<Real> &src);
+
+  
   /// Apply the function y = log(1 + exp(x)), to each element.
   /// Note: the derivative of this function is the sigmoid function.
   /// This is like a soft ReLU.
@@ -375,37 +435,51 @@ class CuMatrixBase {
   /// The output is symmetric.
   void SymInvertPosDef();
 
-  void ApplyPow(Real power);
-  /// Apply power to the absolute value of each element.
-  /// If include_sign is true, the result will be multiplied with
-  /// the sign of the input value.
-  /// If the power is negative and the input to the power is zero,
-  /// The output will be set zero. If include_sign is true, it will
-  /// multiply the result by the sign of the input.
-  void ApplyPowAbs(Real power, bool include_sign=false);
-  /// For each element, sets x = (x > 0 ? 1.0 : 0.0).
-  /// See also Heaviside().
-  void ApplyHeaviside();
-  void ApplyFloor(Real floor_val);
-  void ApplyCeiling(Real ceiling_val);
-  void ApplyExp();
+  inline void ApplyPow(Real power) {
+    this -> Pow(*this, power);
+  };
 
-  /// For each element x of the matrix, set it to
-  /// (x < 0 ? exp(x) : x + 1).  This function is used
-  /// in our RNNLM training.
-  void ApplyExpSpecial();
+  
+  inline void ApplyPowAbs(Real power, bool include_sign=false) {
+    this -> PowAbs(*this, power, include_sign);
+  };
+  
+  inline void ApplyHeaviside() {
+    this -> Heaviside(*this);
+  };
+  
+  inline void ApplyFloor(Real floor_val) {
+    this -> Floor(*this, floor_val);
+  };
+  
+  inline void ApplyCeiling(Real ceiling_val) {
+    this -> Ceiling(*this, ceiling_val);
+  };
+  
+  inline void ApplyExp() {
+    this -> Exp(*this);
+  };
 
-  /// Softmax nonlinearity
-  /// Y = Softmax(X) : Yij = e^Xij / sum_k(e^Xik), done to each row,
-  /// with attention to avoiding  overflow or underflow.
-  /// Supports in-place operation (i.e. this == &src).
-  void ApplySoftMaxPerRow(const CuMatrixBase<Real> &src);
 
-  /// LogSoftmax nonlinearity
-  /// Y = LogSoftmax(X) : Yij = Xij - log(sum_k(e^Xik)), done to each row,
-  /// with attention to avoiding  overflow or underflow.
-  /// Supports in-place operation (i.e. this == &src).
-  void ApplyLogSoftMaxPerRow(const CuMatrixBase<Real> &src);
+  inline void ApplyExpLimited(Real lower_limit, Real upper_limit) {
+    this -> ExpLimited(*this, lower_limit, upper_limit);
+  };
+
+  inline void ApplyExpSpecial() {
+    this -> ExpSpecial(*this);
+  };
+
+  inline void ApplySoftMaxPerRow() {
+    this -> SoftMaxPerRow(*this);
+  };
+
+  inline void ApplyLogSoftMaxPerRow() {
+    this -> LogSoftMaxPerRow(*this);
+  };
+
+  inline void ApplyLog() {
+    this -> Log(*this);
+  };
 
   /// Find the id of the maximal element for each row (resizes the 'id'
   /// array to the appropriate size).
@@ -418,7 +492,6 @@ class CuMatrixBase {
   /// Zeroes all elements for which col > row.
   void SetZeroAboveDiag();
   void Scale(Real value);
-  void ApplyLog();
 
   /// Multiply two matrices elementwise: C = C .* A
   void MulElements(const CuMatrixBase<Real> &A);
@@ -677,8 +750,8 @@ class CuMatrixBase {
 
   // The following two functions should only be called if we did not compile
   // with CUDA or could not get a CUDA card; in that case the contents are
-  // interpreted the same as a regular matrix.  Don't use these unless you know
-  // what you are doing!
+  // interpreted the same as a regular matrix.  DON'T USE THESE UNLESS YOU KNOW
+  // WHAT YOU ARE DOING!
   inline const MatrixBase<Real> &Mat() const {
     return *(reinterpret_cast<const MatrixBase<Real>* >(this));
   }

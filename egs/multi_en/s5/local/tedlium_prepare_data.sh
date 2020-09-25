@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ###########################################################################################
 # This script was copied from egs/tedlium/s5_r2/local/prepare_data.sh
@@ -6,7 +6,6 @@
 # Changes made:
 #  - Specified path to path.sh
 #  - Modified paths to match multi_en naming conventions
-#  - Changed wav.scp to use sox to convert and downsample
 ###########################################################################################
 
 #
@@ -67,7 +66,7 @@ for set in dev test train; do
   cat $dir/utt2spk | utils/utt2spk_to_spk2utt.pl > $dir/spk2utt
 
   # Prepare 'wav.scp', 'reco2file_and_channel'
-  cat $dir/spk2utt | awk -v set=$set '{ printf("%s sox '"$data_src"'/%s/sph/%s.sph -r 8000 -t wavpcm - |\n", $1, set, $1); }' > $dir/wav.scp
+  cat $dir/spk2utt | awk -v set=$set '{ printf("%s sph2pipe -f wav -p '"$data_src"'/%s/sph/%s.sph |\n", $1, set, $1); }' > $dir/wav.scp
   cat $dir/wav.scp | awk '{ print $1, $1, "A"; }' > $dir/reco2file_and_channel
 
   # Create empty 'glm' file

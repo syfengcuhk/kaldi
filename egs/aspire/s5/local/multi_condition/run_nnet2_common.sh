@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #set -e
 # this script is based on local/online/run_nnet2_comman.sh
 # but it operates on corrupted training/dev/test data sets
@@ -56,9 +56,6 @@ if [ $stage -le 1 ]; then
       --random-seed 1 \
       data/${data_dir} data/${data_dir}_rvb
   done
-
-  # create the dev, test and eval sets from the aspire recipe
-  local/multi_condition/aspire_data_prep.sh
 
   # copy the alignments for the newly created utterance ids
   ali_dirs=

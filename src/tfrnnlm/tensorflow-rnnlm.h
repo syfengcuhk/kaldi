@@ -1,4 +1,4 @@
-// tensorflow-rnnlm-lib.h
+// tensorflow-rnnlm.h
 
 // Copyright (C) 2017 Intellisist, Inc. (Author: Hainan Xu)
 
@@ -27,7 +27,33 @@
 #include "base/kaldi-common.h"
 #include "fstext/deterministic-fst.h"
 #include "util/common-utils.h"
-#include "tensorflow/core/public/session.h"
+
+// Following macros are defined in both OpenFst and Tensorflow headers. Here we
+// undef them before including "tensorflow/core/public/session.h" to silence
+// compiler warnings. Note that this is not a panacea. We should still pay
+// attention to the order of includes in other places in the codebase to avoid
+// using the wrong macro definitions. Any OpenFst header or any header including
+// an OpenFst header should be included before tfrnnlm/tensorflow-rnnlm.h. Also,
+// to avoid macro redefinitions, any Tensorflow header should be included after
+// tfrnnlm/tensorflow-rnnlm.h.
+#undef LOG
+#undef VLOG
+#undef CHECK
+#undef CHECK_EQ
+#undef CHECK_LT
+#undef CHECK_GT
+#undef CHECK_LE
+#undef CHECK_GE
+#undef CHECK_NE
+#undef DCHECK
+#undef DCHECK_EQ
+#undef DCHECK_LT
+#undef DCHECK_GT
+#undef DCHECK_LE
+#undef DCHECK_GE
+#undef DCHECK_NE
+
+#include "tensorflow/cc/saved_model/loader.h"
 
 using tensorflow::Session;
 using tensorflow::Tensor;
@@ -71,9 +97,7 @@ class KaldiTfRnnlmWrapper {
                       const std::string &word_symbol_table_rxfilename,
                       const std::string &unk_prob_file,
                       const std::string &tf_model_path);
-  ~KaldiTfRnnlmWrapper() {
-    session_->Close();
-  }
+  ~KaldiTfRnnlmWrapper();
 
   int32 GetEos() const { return eos_; }
 
@@ -130,7 +154,14 @@ class KaldiTfRnnlmWrapper {
   // this corresponds to the RNNLM symbol table
   int32 num_rnn_words;
 
-  Session* session_;  // for TF computation; pointer owned here
+  // for TF computation
+  tensorflow::SavedModelBundle bundle_;
+  std::string word_id_tensor_name_;
+  std::string context_tensor_name_;
+  std::string log_prob_tensor_name_;
+  std::string rnn_out_tensor_name_;
+  std::string rnn_states_tensor_name_;
+  std::string initial_state_tensor_name_;
   int32 eos_;
   int32 oos_;
 

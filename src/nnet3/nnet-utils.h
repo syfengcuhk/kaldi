@@ -118,6 +118,14 @@ void ScaleNnet(BaseFloat scale, Nnet *nnet);
 /// learning_rate_ to 1 for each UpdatableComponent in nnet
 void SetNnetAsGradient(Nnet *nnet);
 
+
+/// Calls the corresponding function in any component of type
+/// StatisticsPoolingComponent; used as a way to compute the 'real' left-right
+/// context of networks including SatisticsPoolingComponent, which will give you
+/// the minimum chunk size they can consume.
+void SetRequireDirectInput(bool b, Nnet *nnet);
+
+
 /// Does *dest += alpha * src (affects nnet parameters and
 /// stored stats).
 void AddNnet(const Nnet &src, BaseFloat alpha, Nnet *dest);
@@ -168,8 +176,7 @@ std::string NnetInfo(const Nnet &nnet);
 void SetDropoutProportion(BaseFloat dropout_proportion, Nnet *nnet);
 
 
-/// Returns true if nnet has at least one component of type
-/// BatchNormComponent.
+/// Returns true if nnet has at least one component of type BatchNormComponent.
 bool HasBatchnorm(const Nnet &nnet);
 
 /// This function affects only components of type BatchNormComponent.
@@ -190,7 +197,7 @@ void RecomputeStats(const std::vector<NnetExample> &egs, Nnet *nnet);
 
 
 /// This function affects components of child-classes of
-/// RandomComponent( currently only DropoutComponent and DropoutMaskComponent).
+/// RandomComponent.
 /// It sets "test mode" on such components (if you call it with test_mode =
 /// true, otherwise it would set normal mode, but this wouldn't be needed often).
 /// "test mode" means that having a mask containing (1-dropout_prob) in all
@@ -235,8 +242,8 @@ struct CollapseModelConfig {
   bool collapse_batchnorm;  // batchnorm then affine.
   bool collapse_affine;  // affine or fixed-affine then affine.
   bool collapse_scale;  // affine then fixed-scale.
-  CollapseModelConfig(): collapse_dropout(true),
-                         collapse_batchnorm(true),
+  CollapseModelConfig(): collapse_dropout(false),
+                         collapse_batchnorm(false),
                          collapse_affine(true),
                          collapse_scale(true) { }
 };
@@ -250,7 +257,6 @@ struct CollapseModelConfig {
  */
 void CollapseModel(const CollapseModelConfig &config,
                    Nnet *nnet);
-
 
 /**
    ReadEditConfig() reads a file with a similar-looking format to the config file
@@ -298,16 +304,22 @@ void CollapseModel(const CollapseModelConfig &config,
        'remove-orphans'.
 
     set-dropout-proportion [name=<name-pattern>] proportion=<dropout-proportion>
-       Sets the dropout rates for any components of type DropoutComponent whose
+       Sets the dropout rates for any components of type DropoutComponent,
+       DropoutMaskComponent or GeneralDropoutComponent whose
        names match the given <name-pattern> (e.g. lstm*).  <name-pattern> defaults to "*".
 
-    apply-svd name=<name-pattern> bottleneck-dim=<dim>
+    apply-svd name=<name-pattern> bottleneck-dim=<dim> energy-threshold=<threshold> shrinkage-threshold=<s>
        Locates all components with names matching <name-pattern>, which are
        type AffineComponent or child classes thereof.  If <dim> is
        less than the minimum of the (input or output) dimension of the component,
-       it does SVD on the components' parameters, retaining only the alrgest
+       it does SVD on the components' parameters, retaining only the largest
        <dim> singular values, replacing these components with sequences of two
        components, of types LinearComponent and NaturalGradientAffineComponent.
+       Instead we can set the filtering criterion for the Singular values as energy-threshold,
+       and retain those values which contribute to energy-threshold times the total energy of
+       the original singular values. A particular SVD factored component is left unshrinked,
+       if the shrinkage ratio of the total no. of its parameters,
+       after the SVD based refactoring, is greater than shrinkage threshold.
        See also 'reduce-rank'.
 
     reduce-rank name=<name-pattern> rank=<dim>
@@ -377,6 +389,17 @@ bool UpdateNnetWithMaxChange(const Nnet &delta_nnet,
                              std::vector<int32> *
                              num_max_change_per_component_applied,
                              int32 *num_max_change_global_applied);
+
+struct MaxChangeStats;
+
+// This overloaded version of UpdateNnetWithMaxChange() is a convenience
+// wrapper for when you have a MaxChangeStats object to keep track
+// of how many times the max-change was applied.  See documentation above.
+bool UpdateNnetWithMaxChange(const Nnet &delta_nnet,
+                             BaseFloat max_param_change,
+                             BaseFloat max_change_scale,
+                             BaseFloat scale, Nnet *nnet,
+                             MaxChangeStats *stats);
 
 
 /**
@@ -452,6 +475,44 @@ void ScaleBatchnormStats(BaseFloat batchnorm_stats_scale,
                          Nnet *nnet);
 
 
+/**
+   This function, to be called after processing every minibatch, is responsible
+   for enforcing the orthogonality constraint for any components of type
+   LinearComponent or inheriting from AffineComponent that have the
+   "orthonormal-constraint" value set to a nonzero value.
+
+   Technically what we are doing is constraining the parameter matrix M to be a
+   "semi-orthogonal" matrix times a constant alpha.  That is: if num-rows >
+   num-cols, this amounts to asserting that M M^T == alpha^2 I; otherwise, that
+   M^T M == alpha^2 I.
+
+   If, for a particular component, orthonormal-constraint > 0.0, then that value
+   becomes the "alpha" mentioned above.  If orthonormal-constraint == 0.0, then
+   nothing is done.  If orthonormal-constraint < 0.0, then it's like letting alpha
+   "float", i.e. we try to make M closer to (any constant alpha) times a
+   semi-orthogonal matrix.
+
+   In order to make it efficient on GPU, it doesn't make it completely orthonormal,
+   it just makes it closer to being orthonormal (times the 'orthonormal_constraint'
+   value).  Over multiple iterations this rapidly makes it almost exactly orthonormal.
+
+   See http://www.danielpovey.com/files/2018_interspeech_tdnnf.pdf
+ */
+void ConstrainOrthonormal(Nnet *nnet);
+
+
+/**
+   This just calls ConsolidateMemory() on all the components of the nnet.  This
+   is called by the training code after processing the first minibatch.  On some
+   components this will do nothing; on some components it will reallocate
+   certain quantities that have been allocated during training (mostly the
+   contents of NaturalGradientOnline objects, and stats for NonlinearComponents)
+   so that they can be put into low memory.  This will tend to minimize
+   memory fragmentation.  Read comments in ../cudamatrix/cu-allocator.h for
+   more explanation.
+ */
+void ConsolidateMemory(Nnet *nnet);
+
 /** This utility function can be used to obtain the number of distinct 'n'
     values in a training example.  This is the number of examples
     (e.g. sequences) that have been combined into a single example.  (Actually
@@ -474,6 +535,24 @@ void ScaleBatchnormStats(BaseFloat batchnorm_stats_scale,
  */
 int32 GetNumNvalues(const std::vector<NnetIo> &io_vec,
                     bool exhaustive);
+
+
+struct MaxChangeStats {
+  int32 num_max_change_global_applied;
+  int32 num_minibatches_processed;
+  std::vector<int32> num_max_change_per_component_applied;
+
+  MaxChangeStats(const Nnet &nnet):
+      num_max_change_global_applied(0),
+      num_minibatches_processed(0),
+      num_max_change_per_component_applied(NumUpdatableComponents(nnet), 0) { }
+
+  // Prints the max-change stats.  Usually will be called at the end
+  // of the program.  The nnet is only needed for structural information,
+  // to work out the component names.
+  void Print(const Nnet &nnet) const;
+};
+
 
 
 } // namespace nnet3

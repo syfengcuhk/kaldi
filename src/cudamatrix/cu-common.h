@@ -32,13 +32,23 @@
 #if HAVE_CUDA == 1
 #include <cublas_v2.h>
 #include <cusparse.h>
+#include <curand.h>
 #include <cuda_runtime_api.h>
+#include "nvToolsExt.h"
 
 #define CU_SAFE_CALL(fun) \
 { \
   int32 ret; \
   if ((ret = (fun)) != 0) { \
     KALDI_ERR << "cudaError_t " << ret << " : \"" << cudaGetErrorString((cudaError_t)ret) << "\" returned from '" << #fun << "'"; \
+  } \
+}
+
+#define CUFFT_SAFE_CALL(fun) \
+{ \
+  int32 ret; \
+  if ((ret = (fun)) != CUFFT_SUCCESS) { \
+    KALDI_ERR << "cublasResult " << ret << " returned from '" << #fun << "'"; \
   } \
 }
 
@@ -50,11 +60,28 @@
   } \
 }
 
+#define CUSOLVER_SAFE_CALL(fun) \
+{ \
+  int32 ret; \
+  if ((ret = (fun)) != 0) { \
+    KALDI_ERR << "cusolverStatus_t " << ret << " : \"" << ret << "\" returned from '" << #fun << "'"; \
+  } \
+}
+
+
 #define CUSPARSE_SAFE_CALL(fun) \
 { \
   int32 ret; \
   if ((ret = (fun)) != 0) { \
     KALDI_ERR << "cusparseStatus_t " << ret << " : \"" << cusparseGetStatusString((cusparseStatus_t)ret) << "\" returned from '" << #fun << "'"; \
+  } \
+}
+
+#define CURAND_SAFE_CALL(fun) \
+{ \
+  int32 ret; \
+  if ((ret = (fun)) != 0) { \
+    KALDI_ERR << "curandStatus_t " << ret << " : \"" << curandGetStatusString((curandStatus_t)ret) << "\" returned from '" << #fun << "'"; \
   } \
 }
 
@@ -67,6 +94,17 @@
 
 
 namespace kaldi {
+
+#ifdef USE_NVTX
+class NvtxTracer {
+public:
+    NvtxTracer(const char* name);
+    ~NvtxTracer();
+};
+#define NVTX_RANGE(name) NvtxTracer uniq_name_using_macros(name);
+#else
+#define NVTX_RANGE(name)
+#endif
 
 /** Number of blocks in which the task of size 'size' is splitted **/
 inline int32 n_blocks(int32 size, int32 block_size) {
@@ -95,8 +133,15 @@ const char* cublasGetStatusString(cublasStatus_t status);
 
 /** This is analogous to the CUDA function cudaGetErrorString(). **/
 const char* cusparseGetStatusString(cusparseStatus_t status);
+
+/** This is analogous to the CUDA function cudaGetErrorString(). **/
+const char* curandGetStatusString(curandStatus_t status);
 }
 
+#else
+namespace kaldi {
+#define NVTX_RANGE(name)
+};
 #endif // HAVE_CUDA
 
 namespace kaldi {

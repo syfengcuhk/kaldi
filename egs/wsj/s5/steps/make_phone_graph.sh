@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # steps/make_phone_graph.sh data/train_100k_nodup/ data/lang exp/tri2_ali_100k_nodup/ exp/tri2
 
@@ -8,6 +8,7 @@
 # is to be used for segmentation, and uses that together with a model to
 # make a decoding graph.
 # Uses SRILM.
+# See also utils/lang/make_phone_bigram_lm.sh.
 
 # Begin configuration section.
 stage=0

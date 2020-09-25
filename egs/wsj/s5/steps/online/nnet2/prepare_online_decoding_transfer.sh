@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright 2014  Johns Hopkins University (Author: Daniel Povey)
 # Apache 2.0
@@ -8,7 +8,7 @@
 # stuff, that you don't want to change, but 
 
 # Begin configuration.
-stage=0 # This allows restarting after partway, when something when wrong.
+stage=0 # This allows restarting after partway, when something went wrong.
 cmd=run.pl
 iter=final
 # End configuration.

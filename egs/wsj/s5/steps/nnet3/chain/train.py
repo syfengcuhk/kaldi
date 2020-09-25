@@ -6,6 +6,8 @@
 
 """ This script is based on steps/nnet3/chain/train.sh
 """
+from __future__ import division
+from __future__ import print_function
 
 import argparse
 import logging
@@ -58,6 +60,13 @@ def get_args():
                         should halve --trainer.samples-per-iter.  May be
                         a comma-separated list of alternatives: first width
                         is the 'principal' chunk-width, used preferentially""")
+    parser.add_argument("--egs.nj", type=int, required=False,
+                        default=0, dest="egs_nj",
+                        help="""Number of jobs to use when generating egs.
+                        Default: the same number as used for tree generation.
+                        You probably do not need to tweak this, unless you
+                        want to adapt a neural network on some different,
+                        smaller-size data.""")
 
     # chain options
     parser.add_argument("--chain.lm-opts", type=str, dest='lm_opts',
@@ -216,21 +225,20 @@ def process_args(args):
             "--trainer.deriv-truncate-margin.".format(
                 args.deriv_truncate_margin))
 
-    if (not os.path.exists(args.dir)
-            or (not os.path.exists(args.dir+"/configs") and
-                not os.path.exists(args.input_model))):
-        raise Exception("This script expects {0} to exist. Also either "
-                        "--trainer.input-model option as initial 'raw' model "
-                        "(used as 0.raw in the script) should be supplied or "
-                        "{0}/configs directory which is the output of "
-                        "make_configs.py script should be provided."
+    if (not os.path.exists(args.dir)):
+        raise Exception("Directory specified with --dir={0} "
+                        "does not exist.".format(args.dir))
+    if (not os.path.exists(args.dir + "/configs") and
+        (args.input_model is None or not os.path.exists(args.input_model))):
+        raise Exception("Either --trainer.input-model option should be supplied, "
+                        "and exist; or the {0}/configs directory should exist."
                         "".format(args.dir))
 
-    if args.transform_dir is None:
-        args.transform_dir = args.lat_dir
     # set the options corresponding to args.use_gpu
     run_opts = common_train_lib.RunOpts()
-    if args.use_gpu:
+    if args.use_gpu in ["true", "false"]:
+        args.use_gpu = ("yes" if args.use_gpu == "true" else "no")
+    if args.use_gpu in ["yes", "wait"]:
         if not common_lib.check_if_cuda_compiled():
             logger.warning(
                 """You are running with one thread but you have not compiled
@@ -239,8 +247,9 @@ def process_args(args):
                    ./configure; make""")
 
         run_opts.train_queue_opt = "--gpu 1"
-        run_opts.parallel_train_opts = ""
+        run_opts.parallel_train_opts = "--use-gpu={}".format(args.use_gpu)
         run_opts.combine_queue_opt = "--gpu 1"
+        run_opts.combine_gpu_opt = "--use-gpu={}".format(args.use_gpu)
 
     else:
         logger.warning("Without using a GPU this will be very slow. "
@@ -249,6 +258,7 @@ def process_args(args):
         run_opts.train_queue_opt = ""
         run_opts.parallel_train_opts = "--use-gpu=no"
         run_opts.combine_queue_opt = ""
+        run_opts.combine_gpu_opt = "--use-gpu=no"
 
     run_opts.command = args.command
     run_opts.egs_command = (args.egs_command
@@ -272,10 +282,18 @@ def train(args, run_opts):
 
     # Check files
     chain_lib.check_for_required_files(args.feat_dir, args.tree_dir,
-                                       args.lat_dir)
+                                       args.lat_dir if args.egs_dir is None
+                                       else None)
+
+    # Copy phones.txt from tree-dir to dir. Later, steps/nnet3/decode.sh will
+    # use it to check compatibility between training and decoding phone-sets.
+    shutil.copy('{0}/phones.txt'.format(args.tree_dir), args.dir)
 
     # Set some variables.
-    num_jobs = common_lib.get_number_of_jobs(args.tree_dir)
+    if args.egs_nj <= 0:
+        num_jobs = common_lib.get_number_of_jobs(args.tree_dir)
+    else:
+        num_jobs = args.egs_nj
     feat_dim = common_lib.get_feat_dim(args.feat_dir)
     ivector_dim = common_lib.get_ivector_dim(args.online_ivector_dir)
     ivector_id = common_lib.get_ivector_extractor_id(args.online_ivector_dir)
@@ -337,19 +355,26 @@ def train(args, run_opts):
             {dir}/init.raw""".format(command=run_opts.command,
                                      dir=args.dir))
 
-    egs_left_context = left_context + args.frame_subsampling_factor / 2
-    egs_right_context = right_context + args.frame_subsampling_factor / 2
+    egs_left_context = left_context + args.frame_subsampling_factor // 2
+    egs_right_context = right_context + args.frame_subsampling_factor // 2
     # note: the '+ args.frame_subsampling_factor / 2' is to allow for the
     # fact that we'll be shifting the data slightly during training to give
     # variety to the training data.
     egs_left_context_initial = (left_context_initial +
-                                args.frame_subsampling_factor / 2 if
+                                args.frame_subsampling_factor // 2 if
                                 left_context_initial >= 0 else -1)
     egs_right_context_final = (right_context_final +
-                               args.frame_subsampling_factor / 2 if
+                               args.frame_subsampling_factor // 2 if
                                right_context_final >= 0 else -1)
 
     default_egs_dir = '{0}/egs'.format(args.dir)
+
+    if (args.egs_dir is not None) and (args.cmvn_opts != "--norm-means=false --norm-vars=false"):
+        logger.warning("the --feat.cmvn-opts option has no effect because we are not dumping egs")
+
+    if (args.egs_dir is not None) and (args.frames_per_iter != 800000):
+        logger.warning("the --trainer.frames-per-iter option has no effect because we are not dumping egs")
+
     if ((args.stage <= -3) and args.egs_dir is None):
         logger.info("Generating egs")
         if (not os.path.exists("{0}/den.fst".format(args.dir)) or
@@ -377,7 +402,6 @@ def train(args, run_opts):
             cmvn_opts=args.cmvn_opts,
             online_ivector_dir=args.online_ivector_dir,
             frames_per_iter=args.frames_per_iter,
-            transform_dir=args.transform_dir,
             stage=args.egs_stage)
 
     if args.egs_dir is None:
@@ -404,6 +428,15 @@ def train(args, run_opts):
     logger.info("Copying the properties from {0} to {1}".format(egs_dir, args.dir))
     common_train_lib.copy_egs_properties_to_exp_dir(egs_dir, args.dir)
 
+    if not os.path.exists('{0}/valid_diagnostic.cegs'.format(egs_dir)):
+        if (not os.path.exists('{0}/valid_diagnostic.scp'.format(egs_dir))):
+            raise Exception('Neither {0}/valid_diagnostic.cegs nor '
+                            '{0}/valid_diagnostic.scp exist.'
+                            'This script expects one of them.'.format(egs_dir))
+        use_multitask_egs = True
+    else:
+        use_multitask_egs = False
+
     if ((args.stage <= -2) and (os.path.exists(args.dir+"/configs/init.config"))
             and (args.input_model is None)):
         logger.info('Computing the preconditioning matrix for input features')
@@ -411,7 +444,8 @@ def train(args, run_opts):
         chain_lib.compute_preconditioning_matrix(
             args.dir, egs_dir, num_archives, run_opts,
             max_lda_jobs=args.max_lda_jobs,
-            rand_prune=args.rand_prune)
+            rand_prune=args.rand_prune,
+            use_multitask_egs=use_multitask_egs)
 
     if (args.stage <= -1):
         logger.info("Preparing the initial acoustic model.")
@@ -428,7 +462,7 @@ def train(args, run_opts):
     num_archives_to_process = int(args.num_epochs * num_archives_expanded)
     num_archives_processed = 0
     num_iters = ((num_archives_to_process * 2)
-                 / (args.num_jobs_initial + args.num_jobs_final))
+                 // (args.num_jobs_initial + args.num_jobs_final))
 
     # If do_final_combination is True, compute the set of models_to_combine.
     # Otherwise, models_to_combine will be none.
@@ -454,9 +488,10 @@ def train(args, run_opts):
         if (args.exit_stage is not None) and (iter == args.exit_stage):
             logger.info("Exiting early due to --exit-stage {0}".format(iter))
             return
-        current_num_jobs = int(0.5 + args.num_jobs_initial
-                               + (args.num_jobs_final - args.num_jobs_initial)
-                               * float(iter) / num_iters)
+
+        current_num_jobs = common_train_lib.get_current_num_jobs(
+            iter, num_iters,
+            args.num_jobs_initial, args.num_jobs_step, args.num_jobs_final)
 
         if args.stage <= iter:
             model_file = "{dir}/{iter}.mdl".format(dir=args.dir, iter=iter)
@@ -485,12 +520,13 @@ def train(args, run_opts):
             shrink_info_str = ''
             if shrinkage_value != 1.0:
                 shrink_info_str = 'shrink: {0:0.5f}'.format(shrinkage_value)
-            logger.info("Iter: {0}/{1}    "
-                        "Epoch: {2:0.2f}/{3:0.1f} ({4:0.1f}% complete)    "
-                        "lr: {5:0.6f}    {6}".format(iter, num_iters - 1,
-                                                     epoch, args.num_epochs,
-                                                     percent,
-                                                     lrate, shrink_info_str))
+            logger.info("Iter: {0}/{1}   Jobs: {2}   "
+                        "Epoch: {3:0.2f}/{4:0.1f} ({5:0.1f}% complete)   "
+                        "lr: {6:0.6f}   {7}".format(iter, num_iters - 1,
+                                                    current_num_jobs,
+                                                    epoch, args.num_epochs,
+                                                    percent,
+                                                    lrate, shrink_info_str))
 
             chain_lib.train_one_iteration(
                 dir=args.dir,
@@ -505,6 +541,7 @@ def train(args, run_opts):
                     args.dropout_schedule,
                     float(num_archives_processed) / num_archives_to_process,
                     iter),
+                train_opts=' '.join(args.train_opts),
                 shrinkage_value=shrinkage_value,
                 num_chunk_per_minibatch_str=args.num_chunk_per_minibatch,
                 apply_deriv_weights=args.apply_deriv_weights,
@@ -519,10 +556,11 @@ def train(args, run_opts):
                 frame_subsampling_factor=args.frame_subsampling_factor,
                 run_opts=run_opts,
                 backstitch_training_scale=args.backstitch_training_scale,
-                backstitch_training_interval=args.backstitch_training_interval)
+                backstitch_training_interval=args.backstitch_training_interval,
+                use_multitask_egs=use_multitask_egs)
 
             if args.cleanup:
-                # do a clean up everythin but the last 2 models, under certain
+                # do a clean up everything but the last 2 models, under certain
                 # conditions
                 common_train_lib.remove_model(
                     args.dir, iter-2, num_iters, models_to_combine,
@@ -554,13 +592,20 @@ def train(args, run_opts):
                 l2_regularize=args.l2_regularize,
                 xent_regularize=args.xent_regularize,
                 run_opts=run_opts,
-                max_objective_evaluations=args.max_objective_evaluations)
+                max_objective_evaluations=args.max_objective_evaluations,
+                use_multitask_egs=use_multitask_egs)
         else:
             logger.info("Copying the last-numbered model to final.mdl")
             common_lib.force_symlink("{0}.mdl".format(num_iters),
                                      "{0}/final.mdl".format(args.dir))
+            chain_lib.compute_train_cv_probabilities(
+                dir=args.dir, iter=num_iters, egs_dir=egs_dir,
+                l2_regularize=args.l2_regularize, xent_regularize=args.xent_regularize,
+                leaky_hmm_coefficient=args.leaky_hmm_coefficient,
+                run_opts=run_opts,
+                use_multitask_egs=use_multitask_egs)
             common_lib.force_symlink("compute_prob_valid.{iter}.log"
-                                     "".format(iter=num_iters-1),
+                                     "".format(iter=num_iters),
                                      "{dir}/log/compute_prob_valid.final.log".format(
                                          dir=args.dir))
 
@@ -573,8 +618,9 @@ def train(args, run_opts):
             # delete it
             remove_egs = False
 
+        # leave the last-two-numbered models, for diagnostic reasons.
         common_train_lib.clean_nnet_dir(
-            args.dir, num_iters, egs_dir,
+            args.dir, num_iters - 1, egs_dir,
             preserve_model_interval=args.preserve_model_interval,
             remove_egs=remove_egs)
 
@@ -588,7 +634,7 @@ def train(args, run_opts):
     with open("{dir}/accuracy.report".format(dir=args.dir), "w") as f:
         f.write(report)
 
-    common_lib.execute_command("steps/info/nnet3_dir_info.pl "
+    common_lib.execute_command("steps/info/chain_dir_info.pl "
                                "{0}".format(args.dir))
 
 

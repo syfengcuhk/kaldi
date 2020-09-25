@@ -31,10 +31,30 @@
 #include "cudamatrix/cu-common.h"
 #include "cudamatrix/cu-matrixdim.h"
 
-
 namespace kaldi {
 
 #if HAVE_CUDA == 1
+
+#ifdef USE_NVTX
+NvtxTracer::NvtxTracer(const char* name) {
+  const uint32_t colors[] = { 0xff00ff00, 0xff0000ff, 0xffffff00, 0xffff00ff, 0xff00ffff, 0xffff0000, 0xffffffff };
+  const int num_colors = sizeof(colors)/sizeof(uint32_t);
+  int color_id = ((int)name[0])%num_colors;
+	nvtxEventAttributes_t eventAttrib = {0};
+	eventAttrib.version = NVTX_VERSION;
+	eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+	eventAttrib.colorType = NVTX_COLOR_ARGB;
+	eventAttrib.color = colors[color_id];
+	eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;
+	eventAttrib.message.ascii = name;
+	nvtxRangePushEx(&eventAttrib);
+  // nvtxRangePushA(name);
+}
+NvtxTracer::~NvtxTracer() {
+  nvtxRangePop();
+}
+#endif
+
 cublasOperation_t KaldiTransToCuTrans(MatrixTransposeType kaldi_trans) {
   cublasOperation_t cublas_trans;
 
@@ -99,8 +119,32 @@ const char* cusparseGetStatusString(cusparseStatus_t status) {
     case CUSPARSE_STATUS_INTERNAL_ERROR:            return "CUSPARSE_STATUS_INTERNAL_ERROR";
     case CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED: return "CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED";
     case CUSPARSE_STATUS_ZERO_PIVOT:                return "CUSPARSE_STATUS_ZERO_PIVOT";
+    #if CUDA_VERSION >= 11000
+    case CUSPARSE_STATUS_NOT_SUPPORTED:             return "CUSPARSE_STATUS_NOT_SUPPORTED";
+    case CUSPARSE_STATUS_INSUFFICIENT_RESOURCES:    return "CUSPARSE_STATUS_INSUFFICIENT_RESOURCES";
+    #endif
   }
   return "CUSPARSE_STATUS_UNKNOWN_ERROR";
+}
+
+const char* curandGetStatusString(curandStatus_t status) {
+  // detail info come from http://docs.nvidia.com/cuda/curand/group__HOST.html
+  switch(status) {
+    case CURAND_STATUS_SUCCESS:                     return "CURAND_STATUS_SUCCESS";
+    case CURAND_STATUS_VERSION_MISMATCH:            return "CURAND_STATUS_VERSION_MISMATCH";
+    case CURAND_STATUS_NOT_INITIALIZED:             return "CURAND_STATUS_NOT_INITIALIZED";
+    case CURAND_STATUS_ALLOCATION_FAILED:           return "CURAND_STATUS_ALLOCATION_FAILED";
+    case CURAND_STATUS_TYPE_ERROR:                  return "CURAND_STATUS_TYPE_ERROR";
+    case CURAND_STATUS_OUT_OF_RANGE:                return "CURAND_STATUS_OUT_OF_RANGE";
+    case CURAND_STATUS_LENGTH_NOT_MULTIPLE:         return "CURAND_STATUS_LENGTH_NOT_MULTIPLE";
+    case CURAND_STATUS_DOUBLE_PRECISION_REQUIRED:   return "CURAND_STATUS_DOUBLE_PRECISION_REQUIRED";
+    case CURAND_STATUS_LAUNCH_FAILURE:              return "CURAND_STATUS_LAUNCH_FAILURE";
+    case CURAND_STATUS_PREEXISTING_FAILURE:         return "CURAND_STATUS_PREEXISTING_FAILURE";
+    case CURAND_STATUS_INITIALIZATION_FAILED:       return "CURAND_STATUS_INITIALIZATION_FAILED";
+    case CURAND_STATUS_ARCH_MISMATCH:               return "CURAND_STATUS_ARCH_MISMATCH";
+    case CURAND_STATUS_INTERNAL_ERROR:              return "CURAND_STATUS_INTERNAL_ERROR";
+  }
+  return "CURAND_STATUS_UNKNOWN_ERROR";
 }
 #endif
 

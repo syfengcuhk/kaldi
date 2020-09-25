@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/kaldi-asr/kaldi.svg?branch=master)](https://travis-ci.org/kaldi-asr/kaldi)
-
+[![Build Status](https://travis-ci.com/kaldi-asr/kaldi.svg?branch=master)](https://travis-ci.com/kaldi-asr/kaldi)
+[![Gitpod Ready-to-Code](https://img.shields.io/badge/Gitpod-Ready--to--Code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/kaldi-asr/kaldi) 
 Kaldi Speech Recognition Toolkit
 ================================
 

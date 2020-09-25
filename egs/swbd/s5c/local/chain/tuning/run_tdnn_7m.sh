@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # 7m is as 7k but adding two non-splicing layers towards the beginning of the
 #   network.
@@ -31,6 +31,7 @@ speed_perturb=true
 dir=exp/chain/tdnn_7m  # Note: _sp will get added to this if $speed_perturb == true.
 decode_iter=
 decode_nj=50
+if [ -e data/rt03 ]; then maybe_rt03=rt03; else maybe_rt03= ; fi
 
 # training options
 num_epochs=4
@@ -121,7 +122,7 @@ if [ $stage -le 12 ]; then
   echo "$0: creating neural net configs using the xconfig parser";
 
   num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
-  learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
+  learning_rate_factor=$(echo "print (0.5/$xent_regularize)" | python)
 
   mkdir -p $dir/configs
   cat <<EOF > $dir/configs/network.xconfig
@@ -214,7 +215,7 @@ if [ ! -z $decode_iter ]; then
 fi
 if [ $stage -le 15 ]; then
   rm $dir/.error 2>/dev/null || true
-  for decode_set in train_dev eval2000; do
+  for decode_set in train_dev eval2000 $maybe_rt03; do
       (
       steps/nnet3/decode.sh --acwt 1.0 --post-decode-acwt 10.0 \
           --nj $decode_nj --cmd "$decode_cmd" $iter_opts \
@@ -243,7 +244,7 @@ if $test_online_decoding && [ $stage -le 16 ]; then
        $lang exp/nnet3/extractor $dir ${dir}_online
 
   rm $dir/.error 2>/dev/null || true
-  for decode_set in train_dev eval2000; do
+  for decode_set in train_dev eval2000 $maybe_rt03; do
     (
       # note: we just give it "$decode_set" as it only uses the wav.scp, the
       # feature type does not matter.

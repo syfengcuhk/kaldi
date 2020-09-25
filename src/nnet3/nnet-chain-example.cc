@@ -31,8 +31,8 @@ void NnetChainSupervision::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, name);
   WriteIndexVector(os, binary, indexes);
   supervision.Write(os, binary);
-  WriteToken(os, binary, "<DW>");  // for DerivWeights.  Want to save space.
-  WriteVectorAsChar(os, binary, deriv_weights);
+  WriteToken(os, binary, "<DW2>");
+  deriv_weights.Write(os, binary);
   WriteToken(os, binary, "</NnetChainSup>");
 }
 
@@ -51,8 +51,11 @@ void NnetChainSupervision::Read(std::istream &is, bool binary) {
   ReadToken(is, binary, &token);
   // in the future this back-compatibility code can be reworked.
   if (token != "</NnetChainSup>") {
-    KALDI_ASSERT(token == "<DW>");
-    ReadVectorAsChar(is, binary, &deriv_weights);
+    KALDI_ASSERT(token == "<DW>" || token == "<DW2>");
+    if (token == "<DW>")
+      ReadVectorAsChar(is, binary, &deriv_weights);
+    else
+      deriv_weights.Read(is, binary);
     ExpectToken(is, binary, "</NnetChainSup>");
   }
   CheckDim();
@@ -82,8 +85,7 @@ void NnetChainSupervision::CheckDim() const {
   }
   if (deriv_weights.Dim() != 0) {
     KALDI_ASSERT(deriv_weights.Dim() == indexes.size());
-    KALDI_ASSERT(deriv_weights.Min() >= 0.0 &&
-                 deriv_weights.Max() <= 1.0);
+    KALDI_ASSERT(deriv_weights.Min() >= 0.0);
   }
 }
 
@@ -204,15 +206,10 @@ static void MergeSupervision(
   input_supervision.reserve(inputs.size());
   for (int32 n = 0; n < num_inputs; n++)
     input_supervision.push_back(&(inputs[n]->supervision));
-  std::vector<chain::Supervision> output_supervision;
-  bool compactify = true;
-  AppendSupervision(input_supervision,
-                    compactify,
-                    &output_supervision);
-  if (output_supervision.size() != 1)
-    KALDI_ERR << "Failed to merge 'chain' examples-- inconsistent lengths "
-              << "or weights?";
-  output->supervision.Swap(&(output_supervision[0]));
+  chain::Supervision output_supervision;
+  MergeSupervision(input_supervision,
+                   &output_supervision);
+  output->supervision.Swap(&output_supervision);
 
   output->indexes.clear();
   output->indexes.reserve(num_indexes);
@@ -323,7 +320,7 @@ void GetChainComputationRequest(const Nnet &nnet,
     const NnetChainSupervision &sup = eg.outputs[i];
     const std::string &name = sup.name;
     int32 node_index = nnet.GetNodeIndex(name);
-    if (node_index == -1 &&
+    if (node_index == -1 ||
         !nnet.IsOutputNode(node_index))
       KALDI_ERR << "Nnet example has output named '" << name
                 << "', but no such output node is in the network.";
@@ -353,6 +350,29 @@ void GetChainComputationRequest(const Nnet &nnet,
     KALDI_ERR << "No outputs in computation request.";
 }
 
+// Returns the frame subsampling factor, which is the difference between the
+// first 't' value we encounter in 'indexes', and the next 't' value that is
+// different from the first 't'.  It will typically be 3.
+// This function will crash if it could not figure it out (e.g. because
+// 'indexes' was empty or had only one element).
+static int32 GetFrameSubsamplingFactor(const std::vector<Index> &indexes) {
+
+  auto iter = indexes.begin(), end = indexes.end();
+  int32 cur_t_value;
+  if (iter != end) {
+    cur_t_value = iter->t;
+    ++iter;
+  }
+  for (; iter != end; ++iter) {
+    if (iter->t != cur_t_value) {
+      KALDI_ASSERT(iter->t > cur_t_value);
+      return iter->t - cur_t_value;
+    }
+  }
+  KALDI_ERR << "Error getting frame subsampling factor";
+  return 0;  // Shouldn't be reached, this is to avoid compiler warnings.
+}
+
 void ShiftChainExampleTimes(int32 frame_shift,
                             const std::vector<std::string> &exclude_names,
                             NnetChainExample *eg) {
@@ -360,7 +380,7 @@ void ShiftChainExampleTimes(int32 frame_shift,
       input_end = eg->inputs.end();
   for (; input_iter != input_end; ++input_iter) {
     bool must_exclude = false;
-    std::vector<string>::const_iterator exclude_iter = exclude_names.begin(),
+    std::vector<std::string>::const_iterator exclude_iter = exclude_names.begin(),
         exclude_end = exclude_names.end();
     for (; exclude_iter != exclude_end; ++exclude_iter)
       if (input_iter->name == *exclude_iter)
@@ -380,10 +400,11 @@ void ShiftChainExampleTimes(int32 frame_shift,
       sup_end = eg->outputs.end();
   for (; sup_iter != sup_end; ++sup_iter) {
     std::vector<Index> &indexes = sup_iter->indexes;
-    KALDI_ASSERT(indexes.size() >= 2 && indexes[0].n == indexes[1].n &&
-                 indexes[0].x == indexes[1].x);
-    int32 frame_subsampling_factor = indexes[1].t - indexes[0].t;
-    KALDI_ASSERT(frame_subsampling_factor > 0);
+    int32 frame_subsampling_factor = GetFrameSubsamplingFactor(indexes);
+    /* KALDI_ASSERT(indexes.size() >= 2 && indexes[0].n == indexes[1].n && */
+    /*              indexes[0].x == indexes[1].x); */
+    /* int32 frame_subsampling_factor = indexes[1].t - indexes[0].t; */
+    /* KALDI_ASSERT(frame_subsampling_factor > 0); */
 
     // We need to shift by a multiple of frame_subsampling_factor.
     // Round to the closest multiple.
@@ -501,7 +522,15 @@ void ChainExampleMerger::WriteMinibatch(
   NnetChainExample merged_eg;
   MergeChainExamples(config_.compress, egs, &merged_eg);
   std::ostringstream key;
-  key << "merged-" << (num_egs_written_++) << "-" << minibatch_size;
+  std::string suffix = "";
+  if(config_.multilingual_eg) {
+      // pick the first output's suffix
+      std::string output_name = merged_eg.outputs[0].name;
+      const size_t pos = output_name.find('-');
+      const size_t len = output_name.length();
+      suffix = "?lang=" + output_name.substr(pos+1, len);
+  }
+  key << "merged-" << (num_egs_written_++) << "-" << minibatch_size << suffix;
   writer_->Write(key.str(), merged_eg);
 }
 
@@ -553,6 +582,52 @@ void ChainExampleMerger::Finish() {
   stats_.PrintStats();
 }
 
+
+bool ParseFromQueryString(const std::string &string,
+                          const std::string &key_name,
+                          std::string *value) {
+  size_t question_mark_location = string.find_last_of("?");
+  if (question_mark_location == std::string::npos)
+    return false;
+  std::string key_name_plus_equals = key_name + "=";
+  // the following do/while and the initialization of key_name_location is a
+  // little convoluted.  We want to find "key_name_plus_equals" but if we find
+  // it and it's not preceded by '?' or '&' then it's part of a longer key and we
+  // need to ignore it and see if there's a next one.
+  size_t key_name_location = question_mark_location;
+  do {
+    key_name_location = string.find(key_name_plus_equals,
+                                    key_name_location + 1);
+  } while (key_name_location != std::string::npos &&
+           key_name_location != question_mark_location + 1 &&
+           string[key_name_location - 1] != '&');
+
+  if (key_name_location == std::string::npos)
+    return false;
+  size_t value_location = key_name_location + key_name_plus_equals.length();
+  size_t next_ampersand = string.find_first_of("&", value_location);
+  size_t value_len;
+  if (next_ampersand == std::string::npos)
+    value_len = std::string::npos;  // will mean "rest of string"
+  else
+    value_len = next_ampersand - value_location;
+  *value = string.substr(value_location, value_len);
+  return true;
+}
+
+
+bool ParseFromQueryString(const std::string &string,
+                          const std::string &key_name,
+                          BaseFloat *value) {
+  std::string s;
+  if (!ParseFromQueryString(string, key_name, &s))
+    return false;
+  bool ans = ConvertStringToReal(s, value);
+  if (!ans)
+    KALDI_ERR << "For key " << key_name << ", expected float but found '"
+              << s << "', in string: " << string;
+  return true;
+}
 
 
 } // namespace nnet3

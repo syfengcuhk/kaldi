@@ -180,9 +180,10 @@ option num_threads=1 --cpus-per-task 1  --ntasks-per-node=1 # Do not add anythin
 default gpu=0
 option gpu=0 -p shared
 option gpu=* -p gpu --gres=gpu:$0 --time 4:0:0  # this has to be figured out
+EOF
+
 # note: the --max-jobs-run option is supported as a special case
 # by slurm.pl and you don't have to handle it in the config file.
-EOF
 
 # Here the configuration options specified by the user on the command line
 # (e.g. --mem 2G) are converted to options to the qsub system as defined in
@@ -394,7 +395,7 @@ print Q ") >$logfile\n";
 print Q "if [ \"\$CUDA_VISIBLE_DEVICES\" == \"NoDevFiles\" ]; then\n";
 print Q "  ( echo CUDA_VISIBLE_DEVICES set to NoDevFiles, unsetting it... \n";
 print Q "  )>>$logfile\n";
-print Q "  unset CUDA_VISIBLE_DEVICES.\n";
+print Q "  unset CUDA_VISIBLE_DEVICES\n";
 print Q "fi\n";
 print Q "time1=\`date +\"%s\"\`\n";
 print Q " ( $cmd ) &>>$logfile\n";
@@ -477,7 +478,7 @@ if (! $sync) { # We're not submitting with -sync y, so we
         # the following (.kick) commands are basically workarounds for NFS bugs.
         if (rand() < 0.25) { # don't do this every time...
           if (rand() > 0.5) {
-            system("touch $qdir/.kick");
+            system("touch $qdir/.kick 2>/dev/null");
           } else {
             system("rm $qdir/.kick 2>/dev/null");
           }
@@ -506,7 +507,7 @@ if (! $sync) { # We're not submitting with -sync y, so we
         if ($squeue_status == 1) {
           # time to make sure it is not just delayed creation of the syncfile.
 
-          # Don't consider immediately missing job as error, first wait some  
+          # Don't consider immediately missing job as error, first wait some
           # time to make sure it is not just delayed creation of the syncfile.
           sleep(4);
           # Sometimes NFS gets confused and thinks it's transmitted the directory
