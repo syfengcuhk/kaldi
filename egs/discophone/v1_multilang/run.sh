@@ -371,4 +371,4 @@ if (($stage <= 13)) && (($stop_stage > 13 )) ; then
 fi
 
 #Uncomment this if you intend to train Chain TDNNF AM in next steps
-#bash local/chain/tuning/run_tdnn_1g.sh
+#bash local/chain_multilang/tuning/run_tdnn_1g.sh
