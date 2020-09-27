@@ -118,7 +118,7 @@ where "nvcc" is installed.
 EOF
 fi
 
-local/chain/run_ivector_common.sh --stage $stage --stop-stage $stop_stage \
+local/chain_multilang/run_ivector_common.sh --stage $stage --stop-stage $stop_stage \
                                   --nj $nj \
                                   --babel-langs $babel_langs \
                                   --babel-recog $babel_recog \
