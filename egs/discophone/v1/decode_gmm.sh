@@ -97,6 +97,7 @@ if ((stage <= 7)); then
       lang_name=$(langname $data_dir)
       expdir=exp/gmm/$lang_name/mono
       utils/mkgraph.sh $lmdir $expdir $expdir/graph
+      decode_nj=$(wc -l <data/${recog_data_dir}/spk2utt)
       steps/decode.sh --nj $decode_nj --cmd "$decode_cmd" \
         $expdir/graph data/$recog_data_dir $expdir/decode
     ) &
@@ -114,6 +115,7 @@ if ((stage <= 8)); then
       lang_name=$(langname $data_dir)
       expdir=exp/gmm/$lang_name/tri1
       utils/mkgraph.sh $lmdir $expdir $expdir/graph
+      decode_nj=$(wc -l <data/${recog_data_dir}/spk2utt)
       steps/decode.sh --nj $decode_nj --cmd "$decode_cmd" \
         $expdir/graph data/$recog_data_dir $expdir/decode
     ) &
@@ -131,6 +133,7 @@ if ((stage <= 9)); then
       lang_name=$(langname $data_dir)
       expdir=exp/gmm/$lang_name/tri2
       utils/mkgraph.sh $lmdir $expdir $expdir/graph
+      decode_nj=$(wc -l <data/${recog_data_dir}/spk2utt)
       steps/decode.sh --nj $decode_nj --cmd "$decode_cmd" \
         $expdir/graph data/$recog_data_dir $expdir/decode
     ) &
@@ -148,6 +151,7 @@ if ((stage <= 10)); then
       lang_name=$(langname $data_dir)
       expdir=exp/gmm/$lang_name/tri3
       utils/mkgraph.sh $lmdir $expdir $expdir/graph
+      decode_nj=$(wc -l <data/${recog_data_dir}/spk2utt)
       steps/decode.sh --nj $decode_nj --cmd "$decode_cmd" \
         $expdir/graph data/$recog_data_dir $expdir/decode
     ) &
@@ -165,6 +169,7 @@ if ((stage <= 11)); then
       lang_name=$(langname $data_dir)
       expdir=exp/gmm/$lang_name/tri4
       utils/mkgraph.sh $lmdir $expdir $expdir/graph
+      decode_nj=$(wc -l <data/${recog_data_dir}/spk2utt)
       steps/decode.sh --nj $decode_nj --cmd "$decode_cmd" \
         $expdir/graph data/$recog_data_dir $expdir/decode
     ) &
@@ -182,6 +187,7 @@ if ((stage <= 12)); then
       lang_name=$(langname $data_dir)
       expdir=exp/gmm/$lang_name/tri5
       utils/mkgraph.sh $lmdir $expdir $expdir/graph
+      decode_nj=$(wc -l <data/${recog_data_dir}/spk2utt)
       steps/decode_fmllr.sh --nj $decode_nj --cmd "$decode_cmd" \
         $expdir/graph data/$recog_data_dir $expdir/decode
     ) &
