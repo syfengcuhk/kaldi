@@ -19,6 +19,7 @@ comp="o"                                                 # pointed to 64hrs read
 
 # GlobalPhone related options
 gp_path="/ws/ifp-04_1/hasegawa/aliabavi/GlobalPhone"
+echo "gp_path is: "$gp_path
 gp_langs="Arabic Czech French Korean Mandarin Spanish Thai"
 gp_recog="Arabic Czech French Korean Mandarin Spanish Thai"
 mboshi_train=false
@@ -70,6 +71,9 @@ if [ "$gp_langs" ] || [ "$gp_recog" ]; then
   if $gp_romanized; then
     extra_args="--romanized"
   fi
+  echo "gp_path is: "$gp_path
+  echo "all_gp_langs is: "$all_gp_langs
+  echo "extra_args is: "$extra_args
   python3 local/prepare_globalphone.py \
     --gp-path $gp_path \
     --output-dir data/GlobalPhone \

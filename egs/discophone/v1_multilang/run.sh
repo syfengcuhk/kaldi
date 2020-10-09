@@ -6,10 +6,12 @@
 set -eou pipefail
 
 stage=0
-stop_stage=500
+stop_stage=7
+echo "stage is: "$stage
+echo "stop stage is: "$stop_stage
 extract_feat_nj=8
-early_train_nj=60
-train_nj=100
+early_train_nj=16
+train_nj=16
 phone_ngram_order=2
 word_ngram_order=3
 # When phone_tokens is false, we will use regular phones (e.g. /ae/) as our basic phonetic unit.
@@ -53,7 +55,7 @@ else
   babel_recog="${babel_langs}"
   gp_langs="Czech French Mandarin Spanish Thai"
   gp_recog="${gp_langs}"
-  gp_path="/export/corpora5/GlobalPhone"
+  gp_path="/ws/ifp-04_1/hasegawa/aliabavi/GlobalPhone"
   mboshi_train=false
   mboshi_recog=false
   gp_romanized=false

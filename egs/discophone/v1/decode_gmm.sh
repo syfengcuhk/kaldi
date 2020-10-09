@@ -5,7 +5,7 @@
 set -eou pipefail
 
 stage=0
-decode_nj=20
+decode_nj=8
 
 langs_config="" # conf/experiments/all-ipa.conf
 if [ $langs_config ]; then

@@ -5,7 +5,7 @@
 set -eou pipefail
 
 stage=0
-train_nj=24
+train_nj=8
 phone_tokens=false
 phone_ngram_order=2
 
