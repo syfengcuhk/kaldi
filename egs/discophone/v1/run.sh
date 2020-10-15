@@ -5,7 +5,7 @@
 set -eou pipefail
 
 stage=0
-train_nj=8
+train_nj=24
 phone_tokens=false
 phone_ngram_order=2
 
@@ -134,7 +134,7 @@ fi
 # When that is ready, we train a multilingual phone-level language model (i.e. phonotactic model),
 # that will be used to compile the decoding graph and to score each ASR system.
 if ((stage <= 3)); then
-  . ./local/prepare_ipa_lm.sh \
+  local/prepare_ipa_lm.sh \
     --train-set "$train_set" \
     --phone_token_opt "$phone_token_opt" \
     --order "$phone_ngram_order"

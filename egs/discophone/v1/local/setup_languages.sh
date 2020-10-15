@@ -7,6 +7,7 @@
 . ./path.sh
 . ./cmd.sh
 . ./conf/lang.conf
+. ./conf/corpora_paths.sh
 
 langs="101 102 103 104 105 106 202 203 204 205 206 207 301 302 303 304 305 306 401 402 403 505"
 recog="107 201 307 404"
@@ -18,8 +19,7 @@ lang="nl"                                                # pointed to folder for
 comp="o"                                                 # pointed to 64hrs read speech #
 
 # GlobalPhone related options
-gp_path="/ws/ifp-04_1/hasegawa/aliabavi/GlobalPhone"
-echo "gp_path is: "$gp_path
+gp_path="$GLOBALPHONE_ROOT"
 gp_langs="Arabic Czech French Korean Mandarin Spanish Thai"
 gp_recog="Arabic Czech French Korean Mandarin Spanish Thai"
 mboshi_train=false

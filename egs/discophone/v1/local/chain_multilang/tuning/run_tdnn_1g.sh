@@ -303,7 +303,6 @@ if [ $stage -le 20 ] && [ $stop_stage -gt 20 ]; then
   for data_dir in ${recog_set}; do
     nspk=$(wc -l <data/${data_dir}_hires/spk2utt)
     steps/online/nnet2/extract_ivectors_online.sh --cmd "$train_cmd" --nj "${nspk}" \
-      --use-vad true \
       data/${data_dir}_hires exp/nnet3/universal/extractor \
       exp/nnet3/universal/ivectors_${data_dir}_hires
   done
