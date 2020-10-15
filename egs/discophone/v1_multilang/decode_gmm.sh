@@ -5,10 +5,6 @@
 set -eou pipefail
 
 stage=0
-<<<<<<< HEAD
-decode_nj=16
-=======
->>>>>>> 12f1c84ba1d5e3d544a5a60d6ae2d3cb619b4ebc
 
 # When use_word_supervisions is true, we will add a language suffix to each word
 # (e.g. "cat" -> "cat_English") and use these transcripts to train a word-level

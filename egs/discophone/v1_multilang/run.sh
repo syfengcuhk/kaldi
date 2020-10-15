@@ -6,12 +6,10 @@
 set -eou pipefail
 
 stage=0
-stop_stage=7
-echo "stage is: "$stage
-echo "stop stage is: "$stop_stage
+stop_stage=500
 extract_feat_nj=8
-early_train_nj=16
-train_nj=16
+early_train_nj=60
+train_nj=100
 phone_ngram_order=2
 word_ngram_order=3
 # When phone_tokens is false, we will use regular phones (e.g. /ae/) as our basic phonetic unit.
@@ -55,7 +53,7 @@ else
   babel_recog="${babel_langs}"
   gp_langs="Czech French Mandarin Spanish Thai"
   gp_recog="${gp_langs}"
-  gp_path="/ws/ifp-04_1/hasegawa/aliabavi/GlobalPhone"
+  gp_path="/export/corpora5/GlobalPhone"
   mboshi_train=false
   mboshi_recog=false
   gp_romanized=false
@@ -213,8 +211,15 @@ if (($stage <= 3)) && (($stop_stage > 3)); then
   #  Pronunciations in data/lang_universal/phones/align_lexicon.txt use IPA phone symbols, same as in monolingual recipe
   mkdir -p data/local/lang_universal
   for data_dir in ${train_set}; do
+    # Concatenate all the lexicons so that we have a matching phones.txt file with full phone coverage
+    dev_data_dir=${data_dir//train/dev}
+    eval_data_dir=${data_dir//train/eval}
     lang_name="$(langname $data_dir)"
-    cp data/$data_dir/lexicon_ipa_suffix.txt data/local/lang_universal/lexicon_ipa_suffix_${lang_name}.txt
+    python3 local/combine_lexicons.py \
+      data/$data_dir/lexicon_ipa_suffix.txt \
+      data/$dev_data_dir/lexicon_ipa_suffix.txt \
+      data/$eval_data_dir/lexicon_ipa_suffix.txt \
+      >data/local/lang_universal/lexicon_ipa_suffix_${lang_name}.txt
   done
   # Create a language-universal lexicon; each word has a language-suffix like "word_English word_Czech";
   # Because of that we can just concatenate and sort the lexicons.
