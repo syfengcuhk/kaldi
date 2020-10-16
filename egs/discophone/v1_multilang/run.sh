@@ -211,8 +211,15 @@ if (($stage <= 3)) && (($stop_stage > 3)); then
   #  Pronunciations in data/lang_universal/phones/align_lexicon.txt use IPA phone symbols, same as in monolingual recipe
   mkdir -p data/local/lang_universal
   for data_dir in ${train_set}; do
+    # Concatenate all the lexicons so that we have a matching phones.txt file with full phone coverage
+    dev_data_dir=${data_dir//train/dev}
+    eval_data_dir=${data_dir//train/eval}
     lang_name="$(langname $data_dir)"
-    cp data/$data_dir/lexicon_ipa_suffix.txt data/local/lang_universal/lexicon_ipa_suffix_${lang_name}.txt
+    python3 local/combine_lexicons.py \
+      data/$data_dir/lexicon_ipa_suffix.txt \
+      data/$dev_data_dir/lexicon_ipa_suffix.txt \
+      data/$eval_data_dir/lexicon_ipa_suffix.txt \
+      >data/local/lang_universal/lexicon_ipa_suffix_${lang_name}.txt
   done
   # Create a language-universal lexicon; each word has a language-suffix like "word_English word_Czech";
   # Because of that we can just concatenate and sort the lexicons.
